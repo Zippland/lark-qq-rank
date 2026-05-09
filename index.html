@@ -245,15 +245,38 @@ const showToast = (msg) => {
   setTimeout(() => toast.classList.remove('visible'), 1800);
 };
 
+const copyText = async (text) => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch { return false; }
+};
+
 $('copy-action').addEventListener('click', async () => {
   const date = $('date').value;
   if (!date) { showToast('请先选择入职日期'); return; }
   currentUrl = buildUrl($('template').value, date, $('prefix').value || '');
   $('url-box').textContent = currentUrl;
-  try {
-    await navigator.clipboard.writeText(currentUrl);
-    showToast('✓ 已复制,粘贴到飞书"创意个性签名"');
-  } catch { showToast('复制失败,请展开 URL 手动复制'); }
+  if (await copyText(currentUrl)) {
+    showToast('✓ 已复制,粘贴到你的签名栏');
+  } else {
+    document.querySelector('details').open = true;
+    showToast('复制失败,请从下方 URL 手动复制');
+  }
 });
 
 updateBio();
