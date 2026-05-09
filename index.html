@@ -21,7 +21,6 @@ header { margin-bottom: 24px; text-align: center; }
 h1 { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
 header p { color: var(--text-2); font-size: 13px; }
 .layout { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
-@media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
 .card { background: var(--card); border-radius: 14px; padding: 22px; box-shadow: var(--shadow); }
 .field { margin-bottom: 14px; }
 label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 6px; font-weight: 500; }
@@ -55,7 +54,6 @@ details[open] summary::before { content: "▾ "; }
 .url-box { background: #fafbfc; border: 1px solid var(--border); padding: 10px 12px; border-radius: 8px;
   font-family: "SF Mono", Monaco, monospace; font-size: 11px; line-height: 1.5;
   word-break: break-all; max-height: 80px; overflow-y: auto; color: var(--text-2); margin: 6px 0; }
-.url-actions a { color: var(--primary); text-decoration: none; font-size: 12px; }
 .preview-card { padding: 0; overflow: hidden; position: sticky; top: 32px; align-self: start; }
 .cover { height: 110px; background: linear-gradient(120deg, #b3d2fa 0%, #c5e1f0 50%, #d4d9f1 100%); }
 .profile-body { padding: 0 22px 22px; position: relative; margin-top: -36px; }
@@ -127,7 +125,6 @@ details[open] summary::before { content: "▾ "; }
         <details>
           <summary>查看生成的 URL</summary>
           <div class="url-box" id="url-box">点击"复制签名"后生成</div>
-          <div class="url-actions"><a href="#" id="open-link" target="_blank" hidden>在浏览器打开 →</a></div>
         </details>
       </div>
     </div>
@@ -253,9 +250,6 @@ $('copy-action').addEventListener('click', async () => {
   if (!date) { showToast('请先选择入职日期'); return; }
   currentUrl = buildUrl($('template').value, date, $('prefix').value || '');
   $('url-box').textContent = currentUrl;
-  const link = $('open-link');
-  link.href = currentUrl;
-  link.hidden = false;
   try {
     await navigator.clipboard.writeText(currentUrl);
     showToast('✓ 已复制,粘贴到飞书"创意个性签名"');
