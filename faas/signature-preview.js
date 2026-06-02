@@ -11,9 +11,12 @@
 //   template symbols | fullDay | fullMonth（默认 symbols）
 //   prefix   前缀文字，如 "Lv. "（可空）
 //   k        飞书图标 image_key（可空，作为预览左侧小图）
+//   text     自定义文字模式：存在则直接作为预览标题（忽略 date/入职时长逻辑）
+//   desc     自定义文字模式的摘要（可空）
 module.exports = async function (request, context) {
-  function ok(title, imageKey) {
+  function ok(title, imageKey, summary) {
     const inline = { i18n_title: { zh_cn: title } };
+    if (summary) inline.i18n_summary = { zh_cn: summary };
     if (imageKey) inline.image_key = imageKey;
     return new Response(JSON.stringify({ inline, expire_strategy: "1day" }), {
       status: 200,
@@ -77,6 +80,13 @@ module.exports = async function (request, context) {
     const template = (params.get("template") || "symbols").trim();
     const prefix = params.get("prefix") != null ? params.get("prefix") : "";
     const iconKey = (params.get("k") || "").trim();
+
+    // 自定义文字模式：带 text 参数则直接把它作为预览标题（静态），不走入职时长逻辑
+    const customText = params.get("text");
+    if (customText != null && customText.trim() !== "") {
+      const desc = (params.get("desc") || params.get("summary") || "").trim();
+      return ok(customText, iconKey, desc);
+    }
 
     const start = new Date(date);
     if (!date || isNaN(start.getTime())) return ok((prefix || "") + "⭐", iconKey);
