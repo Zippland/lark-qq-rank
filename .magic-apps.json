@@ -1,0 +1,12 @@
+{
+  "index.html": {
+    "remoteId": "vlo9H4XAHeM",
+    "urls": {
+      "html_box": "https://magic.solutionsuite.cn/html-box/vlo9H4XAHeM",
+      "dashboard": "https://magic.solutionsuite.cn/dashboard/vlo9H4XAHeM",
+      "panel": "https://applink.feishu.cn/client/web_app/open?mode=panel&appId=cli_a98afe875979500d&width=640&min_width=350&max_width=1000&lk_target_url=https://magic.solutionsuite.cn/html-box/vlo9H4XAHeM",
+      "tab": "https://applink.feishu.cn/client/web_app/open?mode=appCenter&appId=cli_a98afe875979500d&width=640&min_width=350&max_width=1000&lk_target_url=https://magic.solutionsuite.cn/html-box/vlo9H4XAHeM"
+    },
+    "last_published": "2026-06-02T14:22:42.619Z"
+  }
+}
