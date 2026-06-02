@@ -14,10 +14,11 @@
 //   text     自定义文字模式：存在则直接作为预览标题（忽略 date/入职时长逻辑）
 //   desc     自定义文字模式的摘要（可空）
 module.exports = async function (request, context) {
+  // 没选图标时的默认"链接符号"（取自飞书之父 lark-url-preview），保证 inline 永远恰好一个 image_key
+  const DEFAULT_LINK_ICON = "img_v3_02bj_a88d6829-365b-4bec-a574-5733ba95cc7g";
   function ok(title, imageKey, summary) {
-    const inline = { i18n_title: { zh_cn: title } };
+    const inline = { i18n_title: { zh_cn: title }, image_key: imageKey || DEFAULT_LINK_ICON };
     if (summary) inline.i18n_summary = { zh_cn: summary };
-    if (imageKey) inline.image_key = imageKey;
     return new Response(JSON.stringify({ inline, expire_strategy: "1day" }), {
       status: 200,
       headers: { "Content-Type": "application/json; charset=utf-8" },
