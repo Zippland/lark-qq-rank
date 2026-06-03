@@ -82,6 +82,13 @@ module.exports = async function (request, context) {
     const prefix = params.get("prefix") != null ? params.get("prefix") : "";
     const iconKey = (params.get("k") || "").trim();
 
+    // 拼字模式：每个图块一个 raw 预览。title = 文本（换行符或空→零宽空格），image_key = 该图块。
+    // 前端把多个这种链接用空格拼起来，粘进签名后每 5 块换行，拼成 5×5 大图。
+    if (params.get("raw") != null) {
+      const t = params.get("t");
+      return ok((t != null && t !== "") ? t : "​", iconKey);
+    }
+
     // 自定义文字模式：带 text 参数则直接把它作为预览标题（静态），不走入职时长逻辑
     const customText = params.get("text");
     if (customText != null && customText.trim() !== "") {
