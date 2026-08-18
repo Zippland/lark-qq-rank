@@ -260,6 +260,7 @@ details[open] summary::before { transform: rotate(90deg); }
 <script>
 const MAGIC_BASE = 'https://magic.solutionsuite.cn';
 const PREVIEW_FID = 'vlojAfVNVfQ';                 // 妙笔动态预览 FaaS
+const PREVIEW_SCHEMA = '2';                         // 预览协议变更时递增，绕过飞书旧缓存
 const DEFAULT_TARGET = 'https://bytedance.larkoffice.com/docx/ObywdEyRVoGVHgx6EuZcSlEHn5g?preview_comment_id=7646765831505939438';
 const IMG_BASE = 'https://open.feishu.cn/open-apis/block-kit/image/';
 const DEFAULT_LINK_ICON = 'img_v3_02bj_a88d6829-365b-4bec-a574-5733ba95cc7g'; // 没选图标时的默认链接符号（飞书之父同款）
@@ -377,11 +378,12 @@ const buildUrl = () => {
   // 自定义模式：只选了图标、不写字 → raw 链接（零宽标题 + 图标），签名里只显示一个图标
   if (mode === 'custom' && !$('custom-text').value.trim() && selectedKey) {
     const q = new URLSearchParams();
-    q.set('fid', PREVIEW_FID); q.set('raw', '1'); q.set('k', selectedKey); q.set('t', ''); q.set('u', link);
+    q.set('fid', PREVIEW_FID); q.set('pv', PREVIEW_SCHEMA); q.set('raw', '1'); q.set('k', selectedKey); q.set('t', ''); q.set('u', link);
     return `${MAGIC_BASE}/r?${q.toString()}`;
   }
   const p = new URLSearchParams();
   p.set('fid', PREVIEW_FID);
+  p.set('pv', PREVIEW_SCHEMA);
   if (mode === 'custom') {
     p.set('text', $('custom-text').value);
   } else {

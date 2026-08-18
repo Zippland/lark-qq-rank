@@ -13,13 +13,14 @@
 //   k        飞书图标 image_key（可空，作为预览左侧小图）
 //   text     自定义文字模式：存在则直接作为预览标题（忽略 date/入职时长逻辑）
 //   desc     自定义文字模式的摘要（可空）
+//   u        点击签名后的跳转目标；由妙笔 /r 路由处理 307，FaaS 不改写链接地址
 module.exports = async function (request, context) {
   // 没选图标时的默认"链接符号"（取自飞书之父 lark-url-preview），保证 inline 永远恰好一个 image_key
   const DEFAULT_LINK_ICON = "img_v3_02bj_a88d6829-365b-4bec-a574-5733ba95cc7g";
-  function ok(title, imageKey, summary) {
+  function ok(title, imageKey, summary, expireStrategy = "1day") {
     const inline = { i18n_title: { zh_cn: title }, image_key: imageKey || DEFAULT_LINK_ICON };
     if (summary) inline.i18n_summary = { zh_cn: summary };
-    return new Response(JSON.stringify({ inline, expire_strategy: "1day" }), {
+    return new Response(JSON.stringify({ inline, expire_strategy: expireStrategy }), {
       status: 200,
       headers: { "Content-Type": "application/json; charset=utf-8" },
     });
@@ -56,7 +57,7 @@ module.exports = async function (request, context) {
     let params = new URL(request.url).searchParams;
 
     // 2) 飞书预览是 POST，真正的参数藏在 body 的 url.preview.get 事件里
-    if (!params.get("date")) {
+    if (request.method !== "GET") {
       let body = "";
       try { body = await request.text(); } catch (e) {}
       if (body) {
@@ -72,7 +73,9 @@ module.exports = async function (request, context) {
           try { urlObj = new URL(pasted); } catch (e) {
             try { urlObj = new URL(decodeURIComponent(pasted)); } catch (e2) {}
           }
-          if (urlObj) params = urlObj.searchParams;
+          if (urlObj) {
+            params = urlObj.searchParams;
+          }
         }
       }
     }
@@ -124,12 +127,6 @@ module.exports = async function (request, context) {
     }
     return ok(text, iconKey);
   } catch (e) {
-    return new Response(
-      JSON.stringify({
-        inline: { i18n_title: { zh_cn: "签名生成失败" } },
-        expire_strategy: "60s",
-      }),
-      { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } }
-    );
+    return ok("签名生成失败", DEFAULT_LINK_ICON, "", "60s");
   }
 };
