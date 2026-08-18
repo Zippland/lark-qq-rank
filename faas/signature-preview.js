@@ -13,6 +13,8 @@
 //   k        飞书图标 image_key（可空，作为预览左侧小图）
 //   text     自定义文字模式：存在则直接作为预览标题（忽略 date/入职时长逻辑）
 //   weekday  每周彩蛋模式：当前仅支持 4（北京时间星期四），与 text 搭配使用
+//   thursday_text 周四尾缀：存在且非空时启用，仅在北京时间星期四追加到主标题
+//   thursday_sep  主标题与周四尾缀间的分隔符；缺失时默认一个空格，可显式传空串
 //   desc     自定义文字模式的摘要（可空）
 //   u        点击签名后的跳转目标；由妙笔 /r 路由处理 307，FaaS 不改写链接地址
 module.exports = async function (request, context) {
@@ -95,11 +97,25 @@ module.exports = async function (request, context) {
     const iconKey = (params.get("k") || "").trim();
     const CST = 8 * 3600 * 1000;
 
+    // 周四尾缀是主签名的一部分，共用原签名的 image_key 和链接，避免额外的链接符号常驻。
+    // separator 必须区分“缺失”和“空串”：空串代表用户明确选择紧贴原标题。
+    const thursdayText = params.get("thursday_text");
+    const thursdayEnabled = thursdayText != null && thursdayText.trim() !== "";
+    const thursdaySeparator = params.has("thursday_sep") ? params.get("thursday_sep") : " ";
+    const isThursday = new Date(Date.now() + CST).getUTCDay() === 4;
+    function withThursdaySuffix(title) {
+      if (!thursdayEnabled || !isThursday) return title;
+      const baseTitle = title == null ? "" : String(title);
+      const hasVisibleBase = !/^[\u200B-\u200D\u2060\uFEFF]*$/.test(baseTitle);
+      return hasVisibleBase ? baseTitle + thursdaySeparator + thursdayText : thursdayText;
+    }
+
     // 拼字模式：每个图块一个 raw 预览。title = 文本（换行符或空→零宽空格），image_key = 该图块。
     // 前端把多个这种链接用空格拼起来，粘进签名后每 5 块换行，拼成 5×5 大图。
     if (params.get("raw") != null) {
       const t = params.get("t");
-      return ok((t != null && t !== "") ? t : "​", iconKey);
+      const rawTitle = (t != null && t !== "") ? t : "​";
+      return ok(withThursdaySuffix(rawTitle), iconKey);
     }
 
     // 独立周四彩蛋：按北京时间决定是否展示，隐藏时保留零宽标题占位。
@@ -107,7 +123,6 @@ module.exports = async function (request, context) {
     if ((params.get("weekday") || "").trim() === "4") {
       const customText = params.get("text");
       const visibleText = customText != null && customText.trim() !== "" ? customText : "\u200B";
-      const isThursday = new Date(Date.now() + CST).getUTCDay() === 4;
       return textOnly(isThursday ? visibleText : "\u200B");
     }
 
@@ -115,11 +130,11 @@ module.exports = async function (request, context) {
     const customText = params.get("text");
     if (customText != null && customText.trim() !== "") {
       const desc = (params.get("desc") || params.get("summary") || "").trim();
-      return ok(customText, iconKey, desc);
+      return ok(withThursdaySuffix(customText), iconKey, desc);
     }
 
     const start = new Date(date);
-    if (!date || isNaN(start.getTime())) return ok((prefix || "") + "⭐", iconKey);
+    if (!date || isNaN(start.getTime())) return ok(withThursdaySuffix((prefix || "") + "⭐"), iconKey);
 
     // 统一按东八区(UTC+8)口径，避免服务端 UTC 造成月份/天数偏差
     const startC = new Date(start.getTime() + CST);
@@ -143,7 +158,7 @@ module.exports = async function (request, context) {
     } else {
       text = prefix + symbols(calMonths);
     }
-    return ok(text, iconKey);
+    return ok(withThursdaySuffix(text), iconKey);
   } catch (e) {
     return ok("签名生成失败", DEFAULT_LINK_ICON, "", "60s");
   }

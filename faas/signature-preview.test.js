@@ -68,6 +68,160 @@ test("GET 直连兼容自定义文字且不返回 inline.url", async () => {
   assertInlineOnly(result);
 });
 
+test("周四尾缀严格按北京时间的日期边界追加到主标题", async (t) => {
+  const cases = [
+    {
+      name: "周三 23:59:59 保持原标题",
+      now: "2026-08-19T15:59:59.000Z",
+      expected: "主签名",
+    },
+    {
+      name: "周四 00:00:00 开始追加",
+      now: "2026-08-19T16:00:00.000Z",
+      expected: "主签名 🔥 V50 🔥",
+    },
+    {
+      name: "周四 23:59:59 仍然追加",
+      now: "2026-08-20T15:59:59.000Z",
+      expected: "主签名 🔥 V50 🔥",
+    },
+    {
+      name: "周五 00:00:00 恢复原标题",
+      now: "2026-08-20T16:00:00.000Z",
+      expected: "主签名",
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow(item.now, async () => {
+        const result = await previewRequest(previewUrl({
+          text: "主签名",
+          thursday_text: "🔥 V50 🔥",
+          k: "img_custom",
+          u: "https://example.com/target",
+        }));
+
+        assert.equal(result.inline.i18n_title.zh_cn, item.expected);
+        assert.equal(result.inline.image_key, "img_custom");
+        assertInlineOnly(result);
+      });
+    });
+  }
+});
+
+test("周四尾缀支持默认、空串、符号、换行和自定义分隔符", async (t) => {
+  const cases = [
+    { name: "缺失时默认空格", separator: undefined, expected: "正文 尾缀" },
+    { name: "显式空串时紧贴", separator: "", expected: "正文尾缀" },
+    { name: "符号", separator: "｜", expected: "正文｜尾缀" },
+    { name: "换行", separator: "\n", expected: "正文\n尾缀" },
+    { name: "自定义字符串", separator: " · ", expected: "正文 · 尾缀" },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow("2026-08-19T16:00:00.000Z", async () => {
+        const params = { text: "正文", thursday_text: "尾缀", k: "img_separator" };
+        if (item.separator !== undefined) params.thursday_sep = item.separator;
+        const result = await previewRequest(previewUrl(params));
+
+        assert.equal(result.inline.i18n_title.zh_cn, item.expected);
+        assert.equal(result.inline.image_key, "img_separator");
+        assertInlineOnly(result);
+      });
+    });
+  }
+});
+
+test("空白周四尾缀不启用且不追加分隔符", async (t) => {
+  const cases = [
+    { name: "缺失", params: {} },
+    { name: "空串", params: { thursday_text: "" } },
+    { name: "纯空白", params: { thursday_text: "   " } },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow("2026-08-19T16:00:00.000Z", async () => {
+        const result = await previewRequest(previewUrl({
+          text: "正文",
+          thursday_sep: "不应出现",
+          ...item.params,
+        }));
+
+        assert.equal(result.inline.i18n_title.zh_cn, "正文");
+        assertInlineOnly(result);
+      });
+    });
+  }
+});
+
+test("周四尾缀覆盖入职时长、自定义文字和 raw 图标模式并保留各自图标", async (t) => {
+  const cases = [
+    {
+      name: "入职时长",
+      params: { date: "2025-08-20", thursday_text: "尾缀", thursday_sep: " / ", k: "img_tenure" },
+      expectedTitle: "☀️ / 尾缀",
+      expectedIcon: "img_tenure",
+    },
+    {
+      name: "自定义文字",
+      params: { text: "自定义", thursday_text: "尾缀", thursday_sep: " / ", k: "img_custom" },
+      expectedTitle: "自定义 / 尾缀",
+      expectedIcon: "img_custom",
+    },
+    {
+      name: "raw 带原标题",
+      params: { raw: "1", t: "图块文字", thursday_text: "尾缀", thursday_sep: " / ", k: "img_raw_text" },
+      expectedTitle: "图块文字 / 尾缀",
+      expectedIcon: "img_raw_text",
+    },
+    {
+      name: "raw 图标-only 的零宽原标题",
+      params: { raw: "1", t: "", thursday_text: "尾缀", thursday_sep: "不应出现", k: "img_raw_only" },
+      expectedTitle: "尾缀",
+      expectedIcon: "img_raw_only",
+    },
+    {
+      name: "raw 多个零宽字符",
+      params: { raw: "1", t: "\u200B\u2060\uFEFF", thursday_text: "尾缀", thursday_sep: "不应出现", k: "img_raw_zw" },
+      expectedTitle: "尾缀",
+      expectedIcon: "img_raw_zw",
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow("2026-08-19T16:00:00.000Z", async () => {
+        const result = await previewRequest(previewUrl(item.params));
+
+        assert.equal(result.inline.i18n_title.zh_cn, item.expectedTitle);
+        assert.equal(result.inline.image_key, item.expectedIcon);
+        assertInlineOnly(result);
+      });
+    });
+  }
+});
+
+test("周四尾缀优先使用 POST body URL 的标题、尾缀和分隔符", async () => {
+  await withNow("2026-08-19T16:00:00.000Z", async () => {
+    const result = await previewRequest(
+      previewUrl({
+        text: "body title",
+        thursday_text: "body suffix",
+        thursday_sep: "\n",
+        k: "img_body",
+      }),
+      `${API_URL}?text=query+title&thursday_text=query+suffix&thursday_sep=%2F&k=img_query`,
+    );
+
+    assert.equal(result.inline.i18n_title.zh_cn, "body title\nbody suffix");
+    assert.equal(result.inline.image_key, "img_body");
+    assertInlineOnly(result);
+  });
+});
+
 test("周四彩蛋严格按北京时间的日期边界显示", async (t) => {
   const text = "🔥 CrazyThursdayVme50 🔥";
   const cases = [
