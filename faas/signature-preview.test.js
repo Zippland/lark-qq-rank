@@ -30,6 +30,22 @@ function assertInlineOnly(result) {
   assert.notEqual(result.inline.image_key, "");
 }
 
+function assertTextOnly(result) {
+  assert.equal(Object.hasOwn(result.inline, "url"), false);
+  assert.equal(Object.hasOwn(result.inline, "image_key"), false);
+  assert.equal(result.expire_strategy, "1day");
+}
+
+async function withNow(isoTime, callback) {
+  const originalNow = Date.now;
+  Date.now = () => new Date(isoTime).getTime();
+  try {
+    return await callback();
+  } finally {
+    Date.now = originalNow;
+  }
+}
+
 test("POST 预览返回动态标题，但不改写点击 URL", async () => {
   const pastedUrl = previewUrl({
     text: "☀️🌙⭐",
@@ -50,6 +66,79 @@ test("GET 直连兼容自定义文字且不返回 inline.url", async () => {
 
   assert.equal(result.inline.i18n_title.zh_cn, "hello");
   assertInlineOnly(result);
+});
+
+test("周四彩蛋严格按北京时间的日期边界显示", async (t) => {
+  const text = "🔥 CrazyThursdayVme50 🔥";
+  const cases = [
+    {
+      name: "周三 23:59:59 隐藏",
+      now: "2026-08-19T15:59:59.000Z",
+      expected: "\u200B",
+    },
+    {
+      name: "周四 00:00:00 显示",
+      now: "2026-08-19T16:00:00.000Z",
+      expected: text,
+    },
+    {
+      name: "周四 23:59:59 显示",
+      now: "2026-08-20T15:59:59.000Z",
+      expected: text,
+    },
+    {
+      name: "周五 00:00:00 隐藏",
+      now: "2026-08-20T16:00:00.000Z",
+      expected: "\u200B",
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow(item.now, async () => {
+        const result = await previewRequest(previewUrl({
+          weekday: "4",
+          text,
+          k: "img_must_not_be_returned",
+          u: "https://example.com/target",
+        }));
+
+        assert.equal(result.inline.i18n_title.zh_cn, item.expected);
+        assertTextOnly(result);
+      });
+    });
+  }
+});
+
+test("周四彩蛋优先使用 POST body URL 且不返回 inline.url", async () => {
+  await withNow("2026-08-19T16:00:00.000Z", async () => {
+    const result = await previewRequest(
+      previewUrl({ weekday: "4", text: "body wins", k: "img_body" }),
+      `${API_URL}?text=query+loses&k=img_query`,
+    );
+
+    assert.equal(result.inline.i18n_title.zh_cn, "body wins");
+    assertTextOnly(result);
+  });
+});
+
+test("周四彩蛋的缺失、空串或纯空白 text 都返回零宽字符", async (t) => {
+  const cases = [
+    { name: "缺失", params: { weekday: "4" } },
+    { name: "空串", params: { weekday: "4", text: "" } },
+    { name: "纯空白", params: { weekday: "4", text: "   " } },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow("2026-08-19T16:00:00.000Z", async () => {
+        const result = await previewRequest(previewUrl(item.params));
+
+        assert.equal(result.inline.i18n_title.zh_cn, "\u200B");
+        assertTextOnly(result);
+      });
+    });
+  }
 });
 
 test("raw、自定义文字和无效日期分支都只返回展示数据", async (t) => {

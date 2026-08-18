@@ -12,18 +12,27 @@
 //   prefix   前缀文字，如 "Lv. "（可空）
 //   k        飞书图标 image_key（可空，作为预览左侧小图）
 //   text     自定义文字模式：存在则直接作为预览标题（忽略 date/入职时长逻辑）
+//   weekday  每周彩蛋模式：当前仅支持 4（北京时间星期四），与 text 搭配使用
 //   desc     自定义文字模式的摘要（可空）
 //   u        点击签名后的跳转目标；由妙笔 /r 路由处理 307，FaaS 不改写链接地址
 module.exports = async function (request, context) {
-  // 没选图标时的默认"链接符号"（取自飞书之父 lark-url-preview），保证 inline 永远恰好一个 image_key
+  // 原有主模式没选图标时的默认"链接符号"（取自飞书之父 lark-url-preview），保证这些模式恰好一个 image_key
   const DEFAULT_LINK_ICON = "img_v3_02bj_a88d6829-365b-4bec-a574-5733ba95cc7g";
-  function ok(title, imageKey, summary, expireStrategy = "1day") {
-    const inline = { i18n_title: { zh_cn: title }, image_key: imageKey || DEFAULT_LINK_ICON };
-    if (summary) inline.i18n_summary = { zh_cn: summary };
+  function respond(inline, expireStrategy = "1day") {
     return new Response(JSON.stringify({ inline, expire_strategy: expireStrategy }), {
       status: 200,
       headers: { "Content-Type": "application/json; charset=utf-8" },
     });
+  }
+
+  function ok(title, imageKey, summary, expireStrategy = "1day") {
+    const inline = { i18n_title: { zh_cn: title }, image_key: imageKey || DEFAULT_LINK_ICON };
+    if (summary) inline.i18n_summary = { zh_cn: summary };
+    return respond(inline, expireStrategy);
+  }
+
+  function textOnly(title) {
+    return respond({ i18n_title: { zh_cn: title } });
   }
 
   // 符号规则：每 36 月 👑、每 12 月 ☀️、每 3 月 🌙、每 1 月 ⭐（不足 1 月显示单个 ⭐）
@@ -84,12 +93,22 @@ module.exports = async function (request, context) {
     const template = (params.get("template") || "symbols").trim();
     const prefix = params.get("prefix") != null ? params.get("prefix") : "";
     const iconKey = (params.get("k") || "").trim();
+    const CST = 8 * 3600 * 1000;
 
     // 拼字模式：每个图块一个 raw 预览。title = 文本（换行符或空→零宽空格），image_key = 该图块。
     // 前端把多个这种链接用空格拼起来，粘进签名后每 5 块换行，拼成 5×5 大图。
     if (params.get("raw") != null) {
       const t = params.get("t");
       return ok((t != null && t !== "") ? t : "​", iconKey);
+    }
+
+    // 独立周四彩蛋：按北京时间决定是否展示，隐藏时保留零宽标题占位。
+    // 此分支只负责文字展示，不带 image_key，也不改写点击 URL。
+    if ((params.get("weekday") || "").trim() === "4") {
+      const customText = params.get("text");
+      const visibleText = customText != null && customText.trim() !== "" ? customText : "\u200B";
+      const isThursday = new Date(Date.now() + CST).getUTCDay() === 4;
+      return textOnly(isThursday ? visibleText : "\u200B");
     }
 
     // 自定义文字模式：带 text 参数则直接把它作为预览标题（静态），不走入职时长逻辑
@@ -103,7 +122,6 @@ module.exports = async function (request, context) {
     if (!date || isNaN(start.getTime())) return ok((prefix || "") + "⭐", iconKey);
 
     // 统一按东八区(UTC+8)口径，避免服务端 UTC 造成月份/天数偏差
-    const CST = 8 * 3600 * 1000;
     const startC = new Date(start.getTime() + CST);
     const nowC = new Date(Date.now() + CST);
     const totalDays = Math.floor((nowC.getTime() - startC.getTime()) / 86400000);
