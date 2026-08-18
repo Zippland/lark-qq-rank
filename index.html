@@ -74,9 +74,8 @@ textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
   background: #fafbfc; overflow: hidden; }
 .thursday-toggle { min-height: 44px; padding: 10px 12px; margin: 0; display: flex; align-items: center;
   justify-content: space-between; gap: 12px; cursor: pointer; user-select: none; }
-.thursday-toggle-copy { min-width: 0; display: flex; align-items: baseline; gap: 7px; }
+.thursday-toggle-copy { min-width: 0; }
 .thursday-toggle-title { color: var(--ink-2); font-size: 12.5px; font-weight: 600; }
-.thursday-toggle-note { color: var(--ink-3); font-size: 11px; font-weight: 400; white-space: nowrap; }
 .thursday-switch { width: 32px; height: 18px; flex: 0 0 auto; appearance: none; border: 0;
   border-radius: 999px; background: #c9cdd4; position: relative; cursor: pointer; transition: background .16s; }
 .thursday-switch::after { content: ""; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px;
@@ -191,7 +190,6 @@ details[open] summary::before { transform: rotate(90deg); }
 }
 @media (max-width: 430px) {
   .separator-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .thursday-toggle-copy { gap: 5px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; scroll-behavior: auto !important; }
@@ -255,8 +253,7 @@ details[open] summary::before { transform: rotate(90deg); }
       <div class="thursday-box">
         <label class="thursday-toggle" for="thursday-enabled">
           <span class="thursday-toggle-copy">
-            <span class="thursday-toggle-title">🔥 周四尾缀</span>
-            <span class="thursday-toggle-note">仅周四追加</span>
+            <span class="thursday-toggle-title">疯狂星期四文案</span>
           </span>
           <input class="thursday-switch" type="checkbox" id="thursday-enabled" role="switch" aria-controls="thursday-fields" aria-expanded="false">
         </label>
@@ -268,11 +265,11 @@ details[open] summary::before { transform: rotate(90deg); }
           <div class="thursday-field">
             <label>连接方式</label>
             <div class="separator-options" role="radiogroup" aria-label="周四尾缀连接方式">
-              <label class="separator-option"><input type="radio" name="thursday-separator" value="space" checked><span>空格</span></label>
+              <label class="separator-option"><input type="radio" name="thursday-separator" value="space"><span>空格</span></label>
               <label class="separator-option"><input type="radio" name="thursday-separator" value="dot"><span>·</span></label>
               <label class="separator-option"><input type="radio" name="thursday-separator" value="pipe"><span>｜</span></label>
               <label class="separator-option"><input type="radio" name="thursday-separator" value="dash"><span>—</span></label>
-              <label class="separator-option"><input type="radio" name="thursday-separator" value="newline"><span>换行</span></label>
+              <label class="separator-option"><input type="radio" name="thursday-separator" value="newline" checked><span>换行</span></label>
               <label class="separator-option"><input type="radio" name="thursday-separator" value="custom"><span>自定义</span></label>
             </div>
             <input class="input thursday-custom-sep" type="text" id="thursday-custom-separator" maxlength="12" placeholder="自定义内容，可留空" aria-label="自定义连接内容" hidden>
@@ -382,7 +379,7 @@ const THURSDAY_SEPARATORS = {
 const getThursdaySettings = () => {
   const enabled = $('thursday-enabled').checked;
   const selected = document.querySelector('input[name="thursday-separator"]:checked');
-  const type = selected ? selected.value : 'space';
+  const type = selected ? selected.value : 'newline';
   const separator = type === 'custom' ? $('thursday-custom-separator').value : THURSDAY_SEPARATORS[type];
   return { enabled, text: $('thursday-text').value.trim(), separator: separator == null ? '' : separator, type };
 };
