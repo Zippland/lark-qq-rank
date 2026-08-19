@@ -58,16 +58,34 @@ header { display: flex; align-items: flex-start; justify-content: space-between;
 .field:last-child { margin-bottom: 0; }
 label { display: block; font-size: 12px; font-weight: 550; color: var(--ink-2);
   margin-bottom: 7px; letter-spacing: .01em; }
-.input, select, textarea {
+.input, textarea {
   width: 100%; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px;
   font-size: 14px; font-family: inherit; background: #fff; color: var(--ink);
   transition: border-color .15s, box-shadow .15s; }
-select { cursor: pointer; appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238f959e' stroke-width='2.2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 11px center; padding-right: 34px; }
 textarea { resize: vertical; min-height: 76px; line-height: 1.55; }
-.input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary);
+.input:focus, textarea:focus { outline: none; border-color: var(--primary);
   box-shadow: 0 0 0 3px var(--primary-light); }
+.template-tokens { display: flex; flex-wrap: wrap; gap: 6px; margin: 9px 0; }
+.template-token { border: 1px solid #c9d8ff; border-radius: 999px; background: #f4f7ff;
+  color: var(--primary); padding: 5px 9px; font: 550 11.5px/1.2 var(--font); cursor: pointer;
+  transition: border-color .15s, background .15s, transform .08s; }
+.template-token:hover { border-color: var(--primary); background: var(--primary-light); }
+.template-token:active { transform: scale(.97); }
+.template-token:focus-visible { outline: 3px solid var(--primary-light); outline-offset: 1px; }
+.template-token strong { margin-left: 4px; font-weight: 650; color: var(--ink-2); }
+.signature-editor { width: 100%; min-height: 72px; padding: 8px 11px; border: 1px solid var(--line-2);
+  border-radius: 10px; background: #fff; color: var(--ink); font-size: 13.5px; line-height: 2;
+  white-space: pre-wrap; word-break: break-word; cursor: text; transition: border-color .15s, box-shadow .15s; }
+.signature-editor:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+.signature-editor:empty::before { content: attr(data-placeholder); color: var(--ink-3); pointer-events: none; }
+.editor-token { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; margin: 0 2px;
+  padding: 2px 5px 2px 7px; border: 1px solid #b9cbff; border-radius: 6px; background: var(--primary-light);
+  color: var(--primary); font-size: 11.5px; line-height: 1.45; vertical-align: 1px; white-space: nowrap; }
+.editor-token strong { color: var(--ink-2); font-weight: 650; }
+.editor-token-remove { display: grid; place-items: center; width: 14px; height: 14px; border-radius: 4px;
+  color: #7b93c9; font-size: 13px; line-height: 1; cursor: pointer; }
+.editor-token-remove:hover { background: rgba(51,112,255,.12); color: var(--primary); }
+.field-note { color: var(--ink-3); font-size: 11px; margin-top: 5px; }
 
 /* 周四尾缀：两个主模式共用，默认折叠 */
 .thursday-box { margin-top: 18px; border: 1px solid var(--line); border-radius: 12px;
@@ -228,16 +246,16 @@ details[open] summary::before { transform: rotate(90deg); }
           <input class="input" type="date" id="date" value="2025-04-28">
         </div>
         <div class="field">
-          <label>样式</label>
-          <select id="template">
-            <option value="symbols">纯符号 · 最简洁（搭配前缀文字）</option>
-            <option value="fullDay">升级文案 · 按 30.44 天算（精确到日）</option>
-            <option value="fullMonth">升级文案 · 按自然月算</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>前缀文字（拼在最前，可留空）</label>
-          <input class="input" type="text" id="prefix" placeholder="留空 / Lv. / 💎 Lv. / 🦞" value="Lv. ">
+          <label id="signature-editor-label">签名文案</label>
+          <div class="template-tokens" aria-label="可插入的动态组件">
+            <button class="template-token" type="button" data-token="{等级}">等级<strong id="token-level-value">—</strong></button>
+            <button class="template-token" type="button" data-token="{日月星}">日月星<strong id="token-symbols-value">—</strong></button>
+            <button class="template-token" type="button" data-token="{剩余天数}">还剩<strong id="token-days-value">—</strong></button>
+            <button class="template-token" type="button" data-token="{下一等级}">下一级<strong id="token-next-value">—</strong></button>
+          </div>
+          <div class="signature-editor" id="signature-editor" contenteditable="true" role="textbox"
+            aria-labelledby="signature-editor-label" aria-multiline="true" data-placeholder="输入文字，或点击上面的组件插入"></div>
+          <div class="field-note">组件会自动更新，点 × 或按退格可整块删除</div>
         </div>
       </div>
 
@@ -336,7 +354,7 @@ details[open] summary::before { transform: rotate(90deg); }
 <script>
 const MAGIC_BASE = 'https://magic.solutionsuite.cn';
 const PREVIEW_FID = 'vlojAfVNVfQ';                 // 妙笔动态预览 FaaS
-const PREVIEW_SCHEMA = '4';                         // 预览协议变更时递增，绕过飞书旧缓存
+const PREVIEW_SCHEMA = '5';                         // 预览协议变更时递增，绕过飞书旧缓存
 const DEFAULT_TARGET = 'https://bytedance.larkoffice.com/docx/ObywdEyRVoGVHgx6EuZcSlEHn5g?preview_comment_id=7646765831505939438';
 const IMG_BASE = 'https://open.feishu.cn/open-apis/block-kit/image/';
 const DEFAULT_LINK_ICON = 'img_v3_02bj_a88d6829-365b-4bec-a574-5733ba95cc7g'; // 没选图标时的默认链接符号（飞书之父同款）
@@ -345,30 +363,214 @@ const PRESETS = [{"name":"本  月  热  门","images":[{"key":"img_v3_02e1_cf42
 const $ = (id) => document.getElementById(id);
 let mode = 'signature', selectedKey = '', currentUrl = '';
 let toastTimer;
+const hasVisibleText = value => String(value == null ? '' : value)
+  .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').trim() !== '';
 PRESETS.forEach(c => { c._mosaic = (c.images || []).some(i => i.nl); }); // 含 withNewLine 的=大图分类（散块没意义，不在选择器显示）
 
 /* ---------- 入职时长计算（与 FaaS 一致，预览所见即所得） ---------- */
+const DEFAULT_SIGNATURE_FORMAT = 'Lv. {等级} {日月星}（还需要 {剩余天数} 天升级至 Lv.{下一等级}）';
+const MAX_FORMAT_LENGTH = 180;
+const FORMAT_TOKEN_PATTERN = /\{等级\}|\{日月星\}|\{剩余天数\}|\{下一等级\}/g;
 const renderSymbols = (m) => {
   if (m < 1) return '⭐';
   return ('👑'.repeat(Math.floor(m/36)) + '☀️'.repeat(Math.floor((m%36)/12))
     + '🌙'.repeat(Math.floor((m%12)/3)) + '⭐'.repeat(m%3)) || '⭐';
 };
-const renderPreview = (template, date, prefix) => {
-  const start = new Date(date);
-  if (isNaN(start)) return prefix + '⭐';
-  const now = new Date();
-  const totalDays = Math.floor((now - start) / 86400000);
-  const calMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
-  const dayLevel = Math.floor(totalDays / 30.44);
-  if (template === 'fullDay') {
-    const nextLevel = dayLevel + 1;
-    const daysLeft = Math.ceil(nextLevel * 30.44 - totalDays);
-    return `${prefix}${dayLevel} ${renderSymbols(dayLevel)} (还需要 ${daysLeft} 天升级至 Lv.${nextLevel})`;
-  } else if (template === 'fullMonth') {
-    const daysLeft = 30 - (totalDays % 30);
-    return `${prefix}${calMonths} ${renderSymbols(calMonths)} (还需要 ${daysLeft} 天升级至 Lv.${calMonths + 1})`;
+const daysInMonth = (year, month) => new Date(Date.UTC(year, month, 0)).getUTCDate();
+const parseDateParts = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
+  return { year, month, day };
+};
+const dateNumber = (year, month, day) => Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+const getBeijingDateParts = (nowMs = Date.now()) => {
+  const now = new Date(nowMs + 8 * 3600 * 1000);
+  return { year: now.getUTCFullYear(), month: now.getUTCMonth() + 1, day: now.getUTCDate() };
+};
+const calculateTenure = (date, nowMs = Date.now()) => {
+  const start = parseDateParts(date);
+  if (!start) return null;
+  const today = getBeijingDateParts(nowMs);
+  const todayNo = dateNumber(today.year, today.month, today.day);
+  const startNo = dateNumber(start.year, start.month, start.day);
+  if (todayNo < startNo) return { level: 0, daysLeft: startNo - todayNo, nextLevel: 1 };
+
+  const monthDiff = (today.year - start.year) * 12 + (today.month - start.month);
+  const anniversaryDay = Math.min(start.day, daysInMonth(today.year, today.month));
+  const reached = today.day >= anniversaryDay;
+  const level = monthDiff + (reached ? 1 : 0);
+  let nextYear = today.year, nextMonth = today.month;
+  if (reached) {
+    nextMonth += 1;
+    if (nextMonth === 13) { nextMonth = 1; nextYear += 1; }
   }
-  return prefix + renderSymbols(calMonths);
+  const nextDay = Math.min(start.day, daysInMonth(nextYear, nextMonth));
+  return {
+    level,
+    daysLeft: dateNumber(nextYear, nextMonth, nextDay) - todayNo,
+    nextLevel: level + 1
+  };
+};
+const renderFormat = (format, tenure) => {
+  if (!tenure) return '⭐';
+  const values = {
+    '{等级}': String(tenure.level),
+    '{日月星}': renderSymbols(tenure.level),
+    '{剩余天数}': String(tenure.daysLeft),
+    '{下一等级}': String(tenure.nextLevel)
+  };
+  return format.replace(FORMAT_TOKEN_PATTERN, token => values[token]);
+};
+const renderPreview = (date, format) => renderFormat(format, calculateTenure(date));
+const signatureEditor = $('signature-editor');
+const TOKEN_META = {
+  '{等级}': { label: '等级', value: tenure => tenure ? String(tenure.level) : '—' },
+  '{日月星}': { label: '日月星', value: tenure => tenure ? renderSymbols(tenure.level) : '—' },
+  '{剩余天数}': { label: '还剩', value: tenure => tenure ? `${tenure.daysLeft}天` : '—' },
+  '{下一等级}': { label: '下一级', value: tenure => tenure ? String(tenure.nextLevel) : '—' }
+};
+let savedEditorRange = null;
+
+const serializeEditorNode = (node) => {
+  if (node.nodeType === Node.TEXT_NODE) return node.data.replace(/\r\n?/g, '\n');
+  if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return '';
+  if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains('editor-token')) return node.dataset.token || '';
+  if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') return '\n';
+  return Array.from(node.childNodes).map(serializeEditorNode).join('');
+};
+const serializeEditor = () => serializeEditorNode(signatureEditor);
+const tokenValue = (token, tenure) => TOKEN_META[token] ? TOKEN_META[token].value(tenure) : '—';
+const updateEditorToken = (chip, tenure) => {
+  const token = chip.dataset.token;
+  const meta = TOKEN_META[token];
+  if (!meta) return;
+  chip.querySelector('.editor-token-value').textContent = tokenValue(token, tenure);
+  chip.setAttribute('aria-label', `${meta.label} ${tokenValue(token, tenure)}，可整块删除`);
+};
+const createEditorToken = (token, tenure = calculateTenure($('date').value)) => {
+  const meta = TOKEN_META[token];
+  const chip = document.createElement('span');
+  chip.className = 'editor-token';
+  chip.dataset.token = token;
+  chip.contentEditable = 'false';
+  const label = document.createElement('span');
+  label.textContent = meta.label;
+  const value = document.createElement('strong');
+  value.className = 'editor-token-value';
+  const remove = document.createElement('span');
+  remove.className = 'editor-token-remove';
+  remove.textContent = '×';
+  remove.title = `删除${meta.label}`;
+  remove.setAttribute('aria-hidden', 'true');
+  chip.append(label, value, remove);
+  updateEditorToken(chip, tenure);
+  return chip;
+};
+const setEditorFormat = (format) => {
+  const tenure = calculateTenure($('date').value);
+  const nodes = [];
+  let cursor = 0;
+  for (const match of format.matchAll(FORMAT_TOKEN_PATTERN)) {
+    if (match.index > cursor) nodes.push(document.createTextNode(format.slice(cursor, match.index)));
+    nodes.push(createEditorToken(match[0], tenure));
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < format.length) nodes.push(document.createTextNode(format.slice(cursor)));
+  signatureEditor.replaceChildren(...nodes);
+  savedEditorRange = null;
+};
+const truncateFormat = (format, maxLength) => {
+  let result = '', cursor = 0;
+  for (const match of format.matchAll(FORMAT_TOKEN_PATTERN)) {
+    for (const char of format.slice(cursor, match.index)) {
+      if (result.length + char.length > maxLength) return result;
+      result += char;
+    }
+    if (result.length + match[0].length > maxLength) return result;
+    result += match[0];
+    cursor = match.index + match[0].length;
+  }
+  for (const char of format.slice(cursor)) {
+    if (result.length + char.length > maxLength) break;
+    result += char;
+  }
+  return result;
+};
+const editorRange = () => {
+  const selection = window.getSelection();
+  if (selection.rangeCount) {
+    const current = selection.getRangeAt(0);
+    if (signatureEditor.contains(current.commonAncestorContainer)) return current.cloneRange();
+  }
+  if (savedEditorRange && signatureEditor.contains(savedEditorRange.commonAncestorContainer)) return savedEditorRange.cloneRange();
+  const range = document.createRange();
+  range.selectNodeContents(signatureEditor);
+  range.collapse(false);
+  return range;
+};
+const selectRange = (range) => {
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  savedEditorRange = range.cloneRange();
+};
+const selectedFormatLength = range => serializeEditorNode(range.cloneContents()).length;
+const fitsEditorLimit = (range, insertLength) =>
+  serializeEditor().length - selectedFormatLength(range) + insertLength <= MAX_FORMAT_LENGTH;
+const refreshEditor = () => refreshSign();
+const insertTextAtEditorRange = (text) => {
+  const range = editorRange();
+  const remaining = MAX_FORMAT_LENGTH - (serializeEditor().length - selectedFormatLength(range));
+  let allowed = '';
+  for (const char of text) {
+    if (allowed.length + char.length > remaining) break;
+    allowed += char;
+  }
+  if (!allowed && text) { toast(`文案最多 ${MAX_FORMAT_LENGTH} 个字`); return; }
+  range.deleteContents();
+  const node = document.createTextNode(allowed);
+  range.insertNode(node);
+  range.setStartAfter(node);
+  range.collapse(true);
+  selectRange(range);
+  if (allowed.length < text.length) toast(`文案最多 ${MAX_FORMAT_LENGTH} 个字`);
+  refreshEditor();
+};
+const insertEditorToken = (token) => {
+  const range = editorRange();
+  if (!fitsEditorLimit(range, token.length)) { toast(`文案最多 ${MAX_FORMAT_LENGTH} 个字`); return; }
+  range.deleteContents();
+  const chip = createEditorToken(token);
+  range.insertNode(chip);
+  range.setStartAfter(chip);
+  range.collapse(true);
+  selectRange(range);
+  signatureEditor.focus();
+  refreshEditor();
+};
+const removeEditorToken = (chip) => {
+  const parent = chip.parentNode;
+  const next = chip.nextSibling;
+  const previous = chip.previousSibling;
+  chip.remove();
+  const range = document.createRange();
+  if (next && next.parentNode === parent) range.setStartBefore(next);
+  else if (previous && previous.parentNode === parent) range.setStartAfter(previous);
+  else { range.selectNodeContents(signatureEditor); range.collapse(false); }
+  range.collapse(true);
+  selectRange(range);
+  signatureEditor.focus();
+  refreshEditor();
+};
+const refreshTokenValues = () => {
+  const tenure = calculateTenure($('date').value);
+  $('token-level-value').textContent = tenure ? tenure.level : '—';
+  $('token-symbols-value').textContent = tenure ? renderSymbols(tenure.level) : '—';
+  $('token-days-value').textContent = tenure ? `${tenure.daysLeft}天` : '—';
+  $('token-next-value').textContent = tenure ? tenure.nextLevel : '—';
+  signatureEditor.querySelectorAll('.editor-token').forEach(chip => updateEditorToken(chip, tenure));
 };
 
 /* ---------- 周四尾缀 + 签名行预览 ---------- */
@@ -388,11 +590,12 @@ const getThursdaySettings = () => {
 };
 const getBasePreviewText = () => (mode === 'custom')
   ? $('custom-text').value                                         // 空就是空，无占位
-  : renderPreview($('template').value, $('date').value, $('prefix').value || '');
+  : renderPreview($('date').value, serializeEditor());
 const refreshSign = () => {
+  refreshTokenValues();
   const baseText = getBasePreviewText();
   const thursday = getThursdaySettings();
-  const hasVisibleBase = baseText.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '').trim() !== '';
+  const hasVisibleBase = hasVisibleText(baseText);
   const text = thursday.enabled && thursday.text
     ? (hasVisibleBase ? `${baseText}${thursday.separator}${thursday.text}` : thursday.text)
     : baseText;
@@ -475,8 +678,75 @@ $('seg').querySelectorAll('button').forEach(btn => {
     refreshSign();
   });
 });
-['date', 'prefix', 'custom-text', 'custom-link'].forEach(id => $(id).addEventListener('input', refreshSign));
-$('template').addEventListener('change', refreshSign);
+['date', 'custom-text', 'custom-link'].forEach(id => $(id).addEventListener('input', refreshSign));
+document.querySelectorAll('.template-token').forEach(button => {
+  button.addEventListener('mousedown', event => event.preventDefault());
+  button.addEventListener('click', () => insertEditorToken(button.dataset.token));
+});
+document.addEventListener('selectionchange', () => {
+  const selection = window.getSelection();
+  if (selection.rangeCount && signatureEditor.contains(selection.anchorNode)) {
+    savedEditorRange = selection.getRangeAt(0).cloneRange();
+  }
+});
+signatureEditor.addEventListener('beforeinput', event => {
+  if (event.inputType === 'insertParagraph' || event.inputType === 'insertLineBreak') {
+    event.preventDefault();
+    insertTextAtEditorRange('\n');
+    return;
+  }
+  if (event.inputType.startsWith('insert') && typeof event.data === 'string') {
+    const range = editorRange();
+    if (!fitsEditorLimit(range, event.data.length)) {
+      event.preventDefault();
+      toast(`文案最多 ${MAX_FORMAT_LENGTH} 个字`);
+    }
+  }
+});
+signatureEditor.addEventListener('paste', event => {
+  event.preventDefault();
+  insertTextAtEditorRange(event.clipboardData.getData('text/plain').replace(/\r\n?/g, '\n'));
+});
+signatureEditor.addEventListener('drop', event => {
+  event.preventDefault();
+  signatureEditor.focus();
+  insertTextAtEditorRange(event.dataTransfer.getData('text/plain').replace(/\r\n?/g, '\n'));
+});
+signatureEditor.addEventListener('input', () => {
+  const format = serializeEditor();
+  if (format.length > MAX_FORMAT_LENGTH) {
+    setEditorFormat(truncateFormat(format, MAX_FORMAT_LENGTH));
+    toast(`文案最多 ${MAX_FORMAT_LENGTH} 个字`);
+  }
+  refreshEditor();
+});
+signatureEditor.addEventListener('mousedown', event => {
+  if (event.target.closest('.editor-token-remove')) event.preventDefault();
+});
+signatureEditor.addEventListener('click', event => {
+  const remove = event.target.closest('.editor-token-remove');
+  if (remove) removeEditorToken(remove.closest('.editor-token'));
+});
+signatureEditor.addEventListener('keydown', event => {
+  if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+  const selection = window.getSelection();
+  if (!selection.rangeCount || !selection.isCollapsed) return;
+  const range = selection.getRangeAt(0);
+  let node = null;
+  if (range.startContainer === signatureEditor) {
+    node = event.key === 'Backspace'
+      ? signatureEditor.childNodes[range.startOffset - 1]
+      : signatureEditor.childNodes[range.startOffset];
+  } else if (range.startContainer.nodeType === Node.TEXT_NODE) {
+    const text = range.startContainer;
+    if (event.key === 'Backspace' && range.startOffset === 0) node = text.previousSibling;
+    if (event.key === 'Delete' && range.startOffset === text.data.length) node = text.nextSibling;
+  }
+  if (node && node.nodeType === Node.ELEMENT_NODE && node.classList.contains('editor-token')) {
+    event.preventDefault();
+    removeEditorToken(node);
+  }
+});
 $('picker-clear').addEventListener('click', () => { selectedKey = ''; renderList(); refreshSign(); });
 
 const syncThursdayControls = () => {
@@ -503,7 +773,7 @@ const appendThursdayParams = (params) => {
 const buildUrl = () => {
   const link = (mode === 'custom' && $('custom-link').value.trim()) || DEFAULT_TARGET;
   // 自定义模式：只选了图标、不写字 → raw 链接（零宽标题 + 图标），签名里只显示一个图标
-  if (mode === 'custom' && !$('custom-text').value.trim() && selectedKey) {
+  if (mode === 'custom' && !hasVisibleText($('custom-text').value) && selectedKey) {
     const q = new URLSearchParams();
     q.set('fid', PREVIEW_FID); q.set('pv', PREVIEW_SCHEMA); q.set('raw', '1'); q.set('k', selectedKey); q.set('t', ''); q.set('u', link);
     appendThursdayParams(q);
@@ -516,8 +786,7 @@ const buildUrl = () => {
     p.set('text', $('custom-text').value);
   } else {
     p.set('date', $('date').value);
-    p.set('template', $('template').value);
-    const pre = $('prefix').value || ''; if (pre) p.set('prefix', pre);
+    p.set('format', serializeEditor());
   }
   if (selectedKey) p.set('k', selectedKey);
   p.set('u', link);
@@ -538,19 +807,25 @@ const copyText = async (text) => {
 };
 $('copy-action').addEventListener('click', async () => {
   const thursday = getThursdaySettings();
-  if (thursday.enabled && !thursday.text) {
+  if (thursday.enabled && !hasVisibleText(thursday.text)) {
     toast('请输入周四尾缀文字');
     $('thursday-text').focus();
     return;
   }
-  if (mode === 'custom') { if (!$('custom-text').value.trim() && !selectedKey) { toast('请输入文字，或选一个图标'); return; } }
-  else { if (!$('date').value) { toast('请先选择入职日期'); return; } }
+  if (mode === 'custom') { if (!hasVisibleText($('custom-text').value) && !selectedKey) { toast('请输入文字，或选一个图标'); return; } }
+  else {
+    if (!$('date').value) { toast('请先选择入职日期'); return; }
+    if (!hasVisibleText(serializeEditor())) { toast('请输入签名文案'); signatureEditor.focus(); return; }
+  }
   currentUrl = buildUrl();
   $('url-box').textContent = currentUrl;
   if (await copyText(currentUrl)) toast('✓ 已复制，粘到飞书个性签名栏');
   else { document.querySelector('details').open = true; toast('复制失败，请从下方手动复制'); }
 });
 
+const today = getBeijingDateParts();
+$('date').max = `${today.year}-${String(today.month).padStart(2, '0')}-${String(today.day).padStart(2, '0')}`;
+setEditorFormat(DEFAULT_SIGNATURE_FORMAT);
 syncThursdayControls();
 </script>
 </body>

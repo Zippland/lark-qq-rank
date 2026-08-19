@@ -8,8 +8,9 @@
 //
 // 接受的参数（来自签名链接的 query）：
 //   date     入职日期 YYYY-MM-DD（必填，缺失则回退为一颗 ⭐）
-//   template symbols | fullDay | fullMonth（默认 symbols）
-//   prefix   前缀文字，如 "Lv. "（可空）
+//   template symbols | level | countdown；兼容旧 fullDay / fullMonth
+//   format   可组合文案，支持 {等级} {日月星} {剩余天数} {下一等级}
+//   prefix   旧链接兼容：前缀文字，如 "Lv. "（可空）
 //   k        飞书图标 image_key（可空，作为预览左侧小图）
 //   text     自定义文字模式：存在则直接作为预览标题（忽略 date/入职时长逻辑）
 //   weekday  每周彩蛋模式：当前仅支持 4（北京时间星期四），与 text 搭配使用
@@ -46,6 +47,70 @@ module.exports = async function (request, context) {
       "🌙".repeat(Math.floor((m % 12) / 3)) +
       "⭐".repeat(m % 3)
     ) || "⭐";
+  }
+
+  function daysInMonth(year, month) {
+    return new Date(Date.UTC(year, month, 0)).getUTCDate();
+  }
+
+  function parseDateParts(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
+    return { year, month, day };
+  }
+
+  function dateNumber(year, month, day) {
+    return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+  }
+
+  // 入职当日为 Lv.1，此后每到一次月度入职纪念日升级。
+  // 29/30/31 日在短月份钳制到月末，但下个月仍从原始入职日重新计算。
+  function calculateTenure(start, nowMs) {
+    const nowC = new Date(nowMs + 8 * 3600 * 1000);
+    const today = {
+      year: nowC.getUTCFullYear(),
+      month: nowC.getUTCMonth() + 1,
+      day: nowC.getUTCDate(),
+    };
+    const todayNumber = dateNumber(today.year, today.month, today.day);
+    const startNumber = dateNumber(start.year, start.month, start.day);
+
+    // 页面会阻止未来日期；FaaS 仍做防御性处理，入职前显示 Lv.0 并倒计时到入职日。
+    if (todayNumber < startNumber) {
+      return { level: 0, daysLeft: startNumber - todayNumber, nextLevel: 1 };
+    }
+
+    const monthDiff = (today.year - start.year) * 12 + (today.month - start.month);
+    const currentAnniversaryDay = Math.min(start.day, daysInMonth(today.year, today.month));
+    const reachedCurrentAnniversary = today.day >= currentAnniversaryDay;
+    const level = monthDiff + (reachedCurrentAnniversary ? 1 : 0);
+
+    let nextYear = today.year;
+    let nextMonth = today.month;
+    if (reachedCurrentAnniversary) {
+      nextMonth += 1;
+      if (nextMonth === 13) {
+        nextMonth = 1;
+        nextYear += 1;
+      }
+    }
+    const nextDay = Math.min(start.day, daysInMonth(nextYear, nextMonth));
+    const daysLeft = dateNumber(nextYear, nextMonth, nextDay) - todayNumber;
+    return { level, daysLeft, nextLevel: level + 1 };
+  }
+
+  function renderFormat(format, tenure) {
+    const values = {
+      "{等级}": String(tenure.level),
+      "{日月星}": symbols(tenure.level),
+      "{剩余天数}": String(tenure.daysLeft),
+      "{下一等级}": String(tenure.nextLevel),
+    };
+    return format.replace(/\{等级\}|\{日月星\}|\{剩余天数\}|\{下一等级\}/g, (token) => values[token]);
   }
 
   // 在飞书事件对象里深度查找用户粘贴的原始 /r 链接（兜底，防止字段路径变化）
@@ -133,30 +198,26 @@ module.exports = async function (request, context) {
       return ok(withThursdaySuffix(customText), iconKey, desc);
     }
 
-    const start = new Date(date);
-    if (!date || isNaN(start.getTime())) return ok(withThursdaySuffix((prefix || "") + "⭐"), iconKey);
+    const start = parseDateParts(date);
+    if (!start) return ok(withThursdaySuffix((prefix || "") + "⭐"), iconKey);
 
-    // 统一按东八区(UTC+8)口径，避免服务端 UTC 造成月份/天数偏差
-    const startC = new Date(start.getTime() + CST);
-    const nowC = new Date(Date.now() + CST);
-    const totalDays = Math.floor((nowC.getTime() - startC.getTime()) / 86400000);
-    const calMonths =
-      (nowC.getUTCFullYear() - startC.getUTCFullYear()) * 12 +
-      (nowC.getUTCMonth() - startC.getUTCMonth());
-    const dayLevel = Math.floor(totalDays / 30.44);
-
+    const tenure = calculateTenure(start, Date.now());
+    const customFormat = params.has("format") ? (params.get("format") || "").slice(0, 180) : null;
     let text;
-    if (template === "fullDay") {
-      const nextLevel = dayLevel + 1;
-      const daysLeft = Math.ceil(nextLevel * 30.44 - totalDays);
-      text = prefix + dayLevel + " " + symbols(dayLevel) +
-        " (还需要 " + daysLeft + " 天升级至 Lv." + nextLevel + ")";
-    } else if (template === "fullMonth") {
-      const daysLeft = 30 - (totalDays % 30);
-      text = prefix + calMonths + " " + symbols(calMonths) +
-        " (还需要 " + daysLeft + " 天升级至 Lv." + (calMonths + 1) + ")";
+    if (customFormat != null) {
+      text = renderFormat(customFormat, tenure);
+    } else if (template === "level") {
+      const levelPrefix = params.has("prefix") ? prefix : "Lv. ";
+      text = levelPrefix + tenure.level + " " + symbols(tenure.level);
+    } else if (template === "countdown") {
+      const levelPrefix = params.has("prefix") ? prefix : "Lv. ";
+      text = levelPrefix + tenure.level + " " + symbols(tenure.level) +
+        "（还需要 " + tenure.daysLeft + " 天升级至 Lv." + tenure.nextLevel + "）";
+    } else if (template === "fullDay" || template === "fullMonth") {
+      text = prefix + tenure.level + " " + symbols(tenure.level) +
+        " (还需要 " + tenure.daysLeft + " 天升级至 Lv." + tenure.nextLevel + ")";
     } else {
-      text = prefix + symbols(calMonths);
+      text = prefix + symbols(tenure.level);
     }
     return ok(withThursdaySuffix(text), iconKey);
   } catch (e) {

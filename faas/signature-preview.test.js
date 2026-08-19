@@ -46,6 +46,165 @@ async function withNow(isoTime, callback) {
   }
 }
 
+test("等级按每月入职纪念日计算，剩余天数指向下一次升级", async (t) => {
+  const cases = [
+    {
+      name: "本月纪念日前",
+      now: "2026-08-19T04:00:00.000Z",
+      date: "2025-04-28",
+      expected: "Lv. 16 ☀️🌙⭐（还需要 9 天升级至 Lv.17）",
+    },
+    {
+      name: "入职当天从 Lv.1 开始",
+      now: "2026-08-19T04:00:00.000Z",
+      date: "2026-08-19",
+      expected: "Lv. 1 ⭐（还需要 31 天升级至 Lv.2）",
+    },
+    {
+      name: "纪念日当天已经升级",
+      now: "2026-08-28T04:00:00.000Z",
+      date: "2025-04-28",
+      expected: "Lv. 17 ☀️🌙⭐⭐（还需要 31 天升级至 Lv.18）",
+    },
+    {
+      name: "纪念日次日",
+      now: "2026-08-29T04:00:00.000Z",
+      date: "2025-04-28",
+      expected: "Lv. 17 ☀️🌙⭐⭐（还需要 30 天升级至 Lv.18）",
+    },
+    {
+      name: "跨年且未到当月纪念日",
+      now: "2026-01-19T04:00:00.000Z",
+      date: "2025-12-20",
+      expected: "Lv. 1 ⭐（还需要 1 天升级至 Lv.2）",
+    },
+    {
+      name: "跨年纪念日当天",
+      now: "2026-01-20T04:00:00.000Z",
+      date: "2025-12-20",
+      expected: "Lv. 2 ⭐⭐（还需要 31 天升级至 Lv.3）",
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow(item.now, async () => {
+        const result = await previewRequest(previewUrl({
+          date: item.date,
+          template: "countdown",
+          format: "Lv. {等级} {日月星}（还需要 {剩余天数} 天升级至 Lv.{下一等级}）",
+        }));
+        assert.equal(result.inline.i18n_title.zh_cn, item.expected);
+      });
+    });
+  }
+});
+
+test("月底入职日在短月份按月末升级，随后恢复原始入职日", async (t) => {
+  const cases = [
+    {
+      name: "非闰年二月月末前一天",
+      now: "2026-02-27T04:00:00.000Z",
+      date: "2026-01-31",
+      expected: "1|1|2|⭐",
+    },
+    {
+      name: "非闰年二月月末当天",
+      now: "2026-02-28T04:00:00.000Z",
+      date: "2026-01-31",
+      expected: "2|31|3|⭐⭐",
+    },
+    {
+      name: "三月重新回到三十一日",
+      now: "2026-03-30T04:00:00.000Z",
+      date: "2026-01-31",
+      expected: "2|1|3|⭐⭐",
+    },
+    {
+      name: "闰年二月二十九日升级",
+      now: "2024-02-29T04:00:00.000Z",
+      date: "2024-01-31",
+      expected: "2|31|3|⭐⭐",
+    },
+    {
+      name: "二月二十九日入职者非闰年按二十八日升级",
+      now: "2025-02-28T04:00:00.000Z",
+      date: "2024-02-29",
+      expected: "13|29|14|☀️⭐",
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow(item.now, async () => {
+        const result = await previewRequest(previewUrl({
+          date: item.date,
+          format: "{等级}|{剩余天数}|{下一等级}|{日月星}",
+        }));
+        assert.equal(result.inline.i18n_title.zh_cn, item.expected);
+      });
+    });
+  }
+});
+
+test("北京时间零点切换等级，页面外的未来日期安全回退为 Lv.0", async (t) => {
+  await t.test("北京时间零点前", async () => {
+    await withNow("2026-08-19T15:59:59.000Z", async () => {
+      const result = await previewRequest(previewUrl({ date: "2025-08-20", format: "{等级}|{剩余天数}" }));
+      assert.equal(result.inline.i18n_title.zh_cn, "12|1");
+    });
+  });
+  await t.test("北京时间零点后", async () => {
+    await withNow("2026-08-19T16:00:00.000Z", async () => {
+      const result = await previewRequest(previewUrl({ date: "2025-08-20", format: "{等级}|{剩余天数}" }));
+      assert.equal(result.inline.i18n_title.zh_cn, "13|31");
+    });
+  });
+  await t.test("未来入职日期", async () => {
+    await withNow("2026-08-19T04:00:00.000Z", async () => {
+      const result = await previewRequest(previewUrl({ date: "2026-08-28", format: "{等级}|{剩余天数}|{下一等级}|{日月星}" }));
+      assert.equal(result.inline.i18n_title.zh_cn, "0|9|1|⭐");
+    });
+  });
+});
+
+test("占位组件可重复和任意穿插，未知占位符保持原样", async () => {
+  await withNow("2026-08-19T04:00:00.000Z", async () => {
+    const result = await previewRequest(previewUrl({
+      date: "2025-04-28",
+      format: "还剩{剩余天数}天｜{日月星}｜Lv.{等级}→{下一等级}｜再说一次{等级}｜{未知}",
+    }));
+    assert.equal(result.inline.i18n_title.zh_cn, "还剩9天｜☀️🌙⭐｜Lv.16→17｜再说一次16｜{未知}");
+  });
+});
+
+test("内置预设不传 format 也使用同一等级结果", async (t) => {
+  const cases = [
+    { template: "symbols", expected: "☀️🌙⭐" },
+    { template: "level", expected: "Lv. 16 ☀️🌙⭐" },
+    { template: "countdown", expected: "Lv. 16 ☀️🌙⭐（还需要 9 天升级至 Lv.17）" },
+  ];
+  for (const item of cases) {
+    await t.test(item.template, async () => {
+      await withNow("2026-08-19T04:00:00.000Z", async () => {
+        const result = await previewRequest(previewUrl({ date: "2025-04-28", template: item.template }));
+        assert.equal(result.inline.i18n_title.zh_cn, item.expected);
+      });
+    });
+  }
+});
+
+test("旧 fullDay 和 fullMonth 链接统一映射到月度纪念日算法", async (t) => {
+  for (const template of ["fullDay", "fullMonth"]) {
+    await t.test(template, async () => {
+      await withNow("2026-08-19T04:00:00.000Z", async () => {
+        const result = await previewRequest(previewUrl({ date: "2025-04-28", template, prefix: "Lv. " }));
+        assert.equal(result.inline.i18n_title.zh_cn, "Lv. 16 ☀️🌙⭐ (还需要 9 天升级至 Lv.17)");
+      });
+    });
+  }
+});
+
 test("POST 预览返回动态标题，但不改写点击 URL", async () => {
   const pastedUrl = previewUrl({
     text: "☀️🌙⭐",
@@ -162,7 +321,7 @@ test("周四尾缀覆盖入职时长、自定义文字和 raw 图标模式并保
     {
       name: "入职时长",
       params: { date: "2025-08-20", thursday_text: "尾缀", thursday_sep: " / ", k: "img_tenure" },
-      expectedTitle: "☀️ / 尾缀",
+      expectedTitle: "☀️⭐ / 尾缀",
       expectedIcon: "img_tenure",
     },
     {
