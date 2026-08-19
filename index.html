@@ -370,6 +370,7 @@ PRESETS.forEach(c => { c._mosaic = (c.images || []).some(i => i.nl); }); // 含 
 /* ---------- 入职时长计算（与 FaaS 一致，预览所见即所得） ---------- */
 const DEFAULT_SIGNATURE_FORMAT = 'Lv. {等级} {日月星}（还需要 {剩余天数} 天升级至 Lv.{下一等级}）';
 const MAX_FORMAT_LENGTH = 180;
+const MIN_JOIN_YEAR = 1900;
 const FORMAT_TOKEN_PATTERN = /\{等级\}|\{日月星\}|\{剩余天数\}|\{下一等级\}/g;
 const renderSymbols = (m) => {
   if (m < 1) return '⭐';
@@ -381,7 +382,8 @@ const parseDateParts = (value) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return null;
   const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
-  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
+  // type=date 逐位输入 2025 时会短暂产生 0002 / 0020 / 0202，不能拿这些中间态计算。
+  if (year < MIN_JOIN_YEAR || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
   return { year, month, day };
 };
 const dateNumber = (year, month, day) => Math.floor(Date.UTC(year, month - 1, day) / 86400000);
@@ -423,7 +425,10 @@ const renderFormat = (format, tenure) => {
   };
   return format.replace(FORMAT_TOKEN_PATTERN, token => values[token]);
 };
-const renderPreview = (date, format) => renderFormat(format, calculateTenure(date));
+const renderPreview = (date, format) => {
+  const tenure = calculateTenure(date);
+  return tenure ? renderFormat(format, tenure) : '';
+};
 const signatureEditor = $('signature-editor');
 const TOKEN_META = {
   '{等级}': { label: '等级', value: tenure => tenure ? String(tenure.level) : '—' },
@@ -815,6 +820,11 @@ $('copy-action').addEventListener('click', async () => {
   if (mode === 'custom') { if (!hasVisibleText($('custom-text').value) && !selectedKey) { toast('请输入文字，或选一个图标'); return; } }
   else {
     if (!$('date').value) { toast('请先选择入职日期'); return; }
+    if (!parseDateParts($('date').value) || !$('date').validity.valid) {
+      toast(`请输入 ${MIN_JOIN_YEAR} 年至今天的有效日期`);
+      $('date').focus();
+      return;
+    }
     if (!hasVisibleText(serializeEditor())) { toast('请输入签名文案'); signatureEditor.focus(); return; }
   }
   currentUrl = buildUrl();
@@ -824,6 +834,7 @@ $('copy-action').addEventListener('click', async () => {
 });
 
 const today = getBeijingDateParts();
+$('date').min = `${MIN_JOIN_YEAR}-01-01`;
 $('date').max = `${today.year}-${String(today.month).padStart(2, '0')}-${String(today.day).padStart(2, '0')}`;
 setEditorFormat(DEFAULT_SIGNATURE_FORMAT);
 syncThursdayControls();

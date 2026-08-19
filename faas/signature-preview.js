@@ -21,6 +21,7 @@
 module.exports = async function (request, context) {
   // 原有主模式没选图标时的默认"链接符号"（取自飞书之父 lark-url-preview），保证这些模式恰好一个 image_key
   const DEFAULT_LINK_ICON = "img_v3_02bj_a88d6829-365b-4bec-a574-5733ba95cc7g";
+  const MIN_JOIN_YEAR = 1900;
   function respond(inline, expireStrategy = "1day") {
     return new Response(JSON.stringify({ inline, expire_strategy: expireStrategy }), {
       status: 200,
@@ -59,7 +60,8 @@ module.exports = async function (request, context) {
     const year = Number(match[1]);
     const month = Number(match[2]);
     const day = Number(match[3]);
-    if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
+    // 保护日期输入的逐位中间态，也避开 Date.UTC 对 0–99 年按 1900+year 处理的特殊规则。
+    if (year < MIN_JOIN_YEAR || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
     return { year, month, day };
   }
 

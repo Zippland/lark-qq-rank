@@ -168,6 +168,31 @@ test("北京时间零点切换等级，页面外的未来日期安全回退为 L
   });
 });
 
+test("年份逐位输入的中间态不会触发超大等级渲染", async (t) => {
+  const cases = ["0002-04-28", "0020-04-28", "0202-04-28", "1899-04-28"];
+  for (const date of cases) {
+    await t.test(date, async () => {
+      const result = await previewRequest(previewUrl({
+        date,
+        format: "Lv. {等级} {日月星}",
+      }));
+      assert.equal(result.inline.i18n_title.zh_cn, "⭐");
+      assertInlineOnly(result);
+    });
+  }
+});
+
+test("1900 年下边界仍可正常计算", async () => {
+  await withNow("2026-08-19T04:00:00.000Z", async () => {
+    const result = await previewRequest(previewUrl({
+      date: "1900-01-01",
+      format: "{等级}",
+    }));
+    assert.equal(result.inline.i18n_title.zh_cn, "1520");
+    assertInlineOnly(result);
+  });
+});
+
 test("占位组件可重复和任意穿插，未知占位符保持原样", async () => {
   await withNow("2026-08-19T04:00:00.000Z", async () => {
     const result = await previewRequest(previewUrl({
