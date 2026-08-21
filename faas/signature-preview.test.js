@@ -197,9 +197,96 @@ test("占位组件可重复和任意穿插，未知占位符保持原样", async
   await withNow("2026-08-19T04:00:00.000Z", async () => {
     const result = await previewRequest(previewUrl({
       date: "2025-04-28",
-      format: "还剩{剩余天数}天｜{日月星}｜Lv.{等级}→{下一等级}｜再说一次{等级}｜{未知}",
+      format: "累计{总天数}天｜还剩{剩余天数}天｜{日月星}｜Lv.{等级}→{下一等级}｜再说一次{总天数}/{等级}｜{未知}",
     }));
-    assert.equal(result.inline.i18n_title.zh_cn, "还剩9天｜☀️🌙⭐｜Lv.16→17｜再说一次16｜{未知}");
+    assert.equal(result.inline.i18n_title.zh_cn, "累计479天｜还剩9天｜☀️🌙⭐｜Lv.16→17｜再说一次479/16｜{未知}");
+  });
+});
+
+test("疯狂星期四是可任意放置且可重复的格式组件，不依赖旧连接方式", async (t) => {
+  await t.test("周四在所在位置渲染自定义文案", async () => {
+    await withNow("2026-08-19T16:00:00.000Z", async () => {
+      const result = await previewRequest(previewUrl({
+        date: "2025-04-28",
+        format: "前｜{疯狂星期四}｜中｜Lv.{等级}｜后",
+        thursday_text: "V我50",
+        thursday_sep: "不应出现",
+      }));
+
+      assert.equal(result.inline.i18n_title.zh_cn, "前｜V我50｜中｜Lv.16｜后");
+      assertInlineOnly(result);
+    });
+  });
+
+  await t.test("非周四渲染为空串且不再追加旧尾缀", async () => {
+    await withNow("2026-08-18T04:00:00.000Z", async () => {
+      const result = await previewRequest(previewUrl({
+        date: "2025-04-28",
+        format: "前{疯狂星期四}后",
+        thursday_text: "V我50",
+        thursday_sep: "不应出现",
+      }));
+
+      assert.equal(result.inline.i18n_title.zh_cn, "前后");
+      assertInlineOnly(result);
+    });
+  });
+
+  await t.test("重复组件逐个渲染且不会在末尾重复追加", async () => {
+    await withNow("2026-08-19T16:00:00.000Z", async () => {
+      const result = await previewRequest(previewUrl({
+        date: "2025-04-28",
+        format: "{疯狂星期四}/{疯狂星期四}/{疯狂星期四}",
+        thursday_text: "V50",
+        thursday_sep: " + ",
+      }));
+
+      assert.equal(result.inline.i18n_title.zh_cn, "V50/V50/V50");
+      assertInlineOnly(result);
+    });
+  });
+});
+
+test("未使用疯狂星期四组件的旧链接继续按 thursday_sep 追加尾缀", async () => {
+  await withNow("2026-08-19T16:00:00.000Z", async () => {
+    const result = await previewRequest(previewUrl({
+      date: "2025-04-28",
+      format: "Lv.{等级}",
+      thursday_text: "V50",
+      thursday_sep: " / ",
+    }));
+
+    assert.equal(result.inline.i18n_title.zh_cn, "Lv.16 / V50");
+    assertInlineOnly(result);
+  });
+});
+
+test("总天数按北京时间自然日计算，入职当天计第 1 天", async (t) => {
+  const cases = [
+    { name: "入职当天", now: "2026-08-19T04:00:00.000Z", date: "2026-08-19", expected: "1" },
+    { name: "入职次日", now: "2026-08-20T04:00:00.000Z", date: "2026-08-19", expected: "2" },
+    { name: "跨闰日", now: "2024-03-01T04:00:00.000Z", date: "2024-02-28", expected: "3" },
+    { name: "未来日期钳制为零", now: "2026-08-19T04:00:00.000Z", date: "2026-08-20", expected: "0" },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow(item.now, async () => {
+        const result = await previewRequest(previewUrl({ date: item.date, format: "{总天数}" }));
+        assert.equal(result.inline.i18n_title.zh_cn, item.expected);
+      });
+    });
+  }
+
+  await t.test("北京时间零点切换", async () => {
+    await withNow("2026-08-19T15:59:59.000Z", async () => {
+      const before = await previewRequest(previewUrl({ date: "2026-08-19", format: "{总天数}" }));
+      assert.equal(before.inline.i18n_title.zh_cn, "1");
+    });
+    await withNow("2026-08-19T16:00:00.000Z", async () => {
+      const after = await previewRequest(previewUrl({ date: "2026-08-19", format: "{总天数}" }));
+      assert.equal(after.inline.i18n_title.zh_cn, "2");
+    });
   });
 });
 
@@ -250,6 +337,58 @@ test("GET 直连兼容自定义文字且不返回 inline.url", async () => {
 
   assert.equal(result.inline.i18n_title.zh_cn, "hello");
   assertInlineOnly(result);
+});
+
+test("自定义尾缀每天显示，并支持空格、符号、换行与空连接符", async (t) => {
+  const cases = [
+    { name: "缺失时默认空格", separator: undefined, expected: "正文 尾缀" },
+    { name: "显式空串时紧贴", separator: "", expected: "正文尾缀" },
+    { name: "符号", separator: " · ", expected: "正文 · 尾缀" },
+    { name: "换行", separator: "\n", expected: "正文\n尾缀" },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow("2026-08-18T04:00:00.000Z", async () => {
+        const params = { text: "正文", suffix_text: "尾缀", k: "img_suffix" };
+        if (item.separator !== undefined) params.suffix_sep = item.separator;
+        const result = await previewRequest(previewUrl(params));
+
+        assert.equal(result.inline.i18n_title.zh_cn, item.expected);
+        assert.equal(result.inline.image_key, "img_suffix");
+        assertInlineOnly(result);
+      });
+    });
+  }
+});
+
+test("普通尾缀先于疯狂星期四尾缀，且空标题不会带出多余连接符", async (t) => {
+  await t.test("周四按普通尾缀、周四尾缀的顺序拼接", async () => {
+    await withNow("2026-08-19T16:00:00.000Z", async () => {
+      const result = await previewRequest(previewUrl({
+        text: "正文\n ",
+        suffix_text: "常驻",
+        suffix_sep: " · ",
+        thursday_text: "V50",
+        thursday_sep: "\n",
+      }));
+      assert.equal(result.inline.i18n_title.zh_cn, "正文 · 常驻\nV50");
+      assertInlineOnly(result);
+    });
+  });
+
+  await t.test("raw 空标题直接显示普通尾缀", async () => {
+    await withNow("2026-08-18T04:00:00.000Z", async () => {
+      const result = await previewRequest(previewUrl({
+        raw: "1",
+        t: "",
+        suffix_text: "只有尾缀",
+        suffix_sep: "\n",
+      }));
+      assert.equal(result.inline.i18n_title.zh_cn, "只有尾缀");
+      assertInlineOnly(result);
+    });
+  });
 });
 
 test("周四尾缀严格按北京时间的日期边界追加到主标题", async (t) => {
@@ -312,6 +451,47 @@ test("周四尾缀支持默认、空串、符号、换行和自定义分隔符",
 
         assert.equal(result.inline.i18n_title.zh_cn, item.expected);
         assert.equal(result.inline.image_key, "img_separator");
+        assertInlineOnly(result);
+      });
+    });
+  }
+});
+
+test("原标题末尾回车不会与周四连接方式叠加", async (t) => {
+  const cases = [
+    {
+      name: "自定义文字末尾换行和空白 + 空格",
+      params: { text: "正文\n ", thursday_sep: " " },
+      expected: "正文 尾缀",
+    },
+    {
+      name: "入职文案末尾 CRLF 和零宽字符 + 换行",
+      params: { date: "2025-08-20", format: "正文\r\n\u200B", thursday_sep: "\n" },
+      expected: "正文\n尾缀",
+    },
+    {
+      name: "Unicode 行分隔符 + 空格",
+      params: { date: "2025-08-20", format: "正文\u2028\u200B", thursday_sep: " " },
+      expected: "正文 尾缀",
+    },
+    {
+      name: "纯空白原标题不追加连接符",
+      params: { date: "2025-08-20", format: " \t", thursday_sep: " · " },
+      expected: "尾缀",
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, async () => {
+      await withNow("2026-08-19T16:00:00.000Z", async () => {
+        const result = await previewRequest(previewUrl({
+          ...item.params,
+          thursday_text: "尾缀",
+          k: "img_trailing_newline",
+        }));
+
+        assert.equal(result.inline.i18n_title.zh_cn, item.expected);
+        assert.equal(result.inline.image_key, "img_trailing_newline");
         assertInlineOnly(result);
       });
     });
